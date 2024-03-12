@@ -1,0 +1,9 @@
+{
+    "cSpell.words": [
+        "dropna",
+        "fillna",
+        "quandl"
+    ],
+    "cmake.sourceDirectory": "/home/hpn724/Programming/mltensorlib/lib/python3.10/site-packages/tensorflow/xla_aot_runtime_src",
+    "cmake.cmakePath":"/usr/bin/cmake"
+}
