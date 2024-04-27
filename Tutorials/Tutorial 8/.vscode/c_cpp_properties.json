@@ -1,13 +1,12 @@
 {
   "configurations": [
     {
-      "name": "linux-gcc-x64",
+      "name": "linux-clang-x64",
       "includePath": [
         "${workspaceFolder}/**",
         "/usr/lib/x86_64-linux-gnu/openmpi/include/"
-
       ],
-      "compilerPath": "/usr/bin/gcc",
+      "compilerPath": "usr/bin/mpiCC",
       "cStandard": "${default}",
       "cppStandard": "${default}",
       "intelliSenseMode": "linux-gcc-x64",
