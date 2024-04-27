@@ -1,7 +1,7 @@
 /*
 Go to README.md and read the setting up for the tutorial
 
-1. Develop a sequential program (in C/C++ or FORTRAN) for solving the system of linear equations described
+1. Develop a parallel program (in C/C++ or FORTRAN) for solving the system of linear equations described
 above using Jacobi iteration method.
 
 */
@@ -13,6 +13,7 @@ above using Jacobi iteration method.
 #include<stdio.h>
 #include<algorithm>
 #include<omp.h>
+
 
 using namespace std;
 
@@ -139,9 +140,11 @@ void show_vector(double* x, int n)
 }
 
 //Function to calculate the difference of two given vectors
-double* vector_diff(double* x1, double* x2, int n)
+double* vector_diff(double* x1, double* x2, int n, int threads)
 {
+
     double* diff = new double[n];
+    #pragma omp parallel for num_threads(threads)
     for(int i=0;i<n;i++)
     {
         diff[i]=x1[i]-x2[i];
@@ -150,10 +153,12 @@ double* vector_diff(double* x1, double* x2, int n)
 }
 
 //Function to calculate the norm of a vector
-double vector_norm(double* x, int n)
+double vector_norm(double* x, int n, int threads)
 {
     double sum=0;
-    for(int i=0;i<n;i++)
+    int i;
+    #pragma omp parallel for num_threads(threads) shared(i,x) reduction(+ : sum)
+    for(i=0;i<n;i++)
     {
         sum+=pow(x[i],2);
     }
@@ -161,10 +166,11 @@ double vector_norm(double* x, int n)
 }
 
 //Jacobi iteration function
-double* jacobi_iteration(double** a, double* b, int n, double init_value, double threshold)
+double* jacobi_iteration(double** a, double* b, int n, double init_value, double threshold, int threads)
 {
-    
+
     double time_taken = omp_get_wtime();
+    
     double* xk=initialize_sols_vector(n,init_value); 
     double* xk1=new double[n];
     int counter=0;
@@ -172,48 +178,53 @@ double* jacobi_iteration(double** a, double* b, int n, double init_value, double
 
     double current_error = 100; 
     
-    while( abs(current_error) > threshold && counter< iter_limit)
+    int i,j;
+    double temp_sum;
+
+    #pragma omp parallel num_threads(threads) private(i,j,temp_sum) shared(xk1,xk,threads,a,b,current_error,counter,n,iter_limit,threshold) 
     {
-
-        for(int i=0;i<n;i++)
+        while( abs(current_error) > threshold && counter< iter_limit)
         {
-            double temp_sum=0.0;
 
-            for(int j=0;j<n;j++)
+            for(i=0;i<n;i++)
             {
-                if(j==i)
-                {
-                    continue;
-                }
-                temp_sum+=a[i][j]*xk[j];
+                temp_sum=0.0;
+                #pragma omp parallel for
+                    for(j=0;j<n;j++)
+                    {
+                        if(j==i)
+                        {
+                            continue;
+                        }
+                        temp_sum+=a[i][j]*xk[j];
+                    }
+
+                xk1[i]=(1/a[i][i])*(b[i]-temp_sum);
             }
 
-            xk1[i]=(1/a[i][i])*(b[i]-temp_sum);
-        }
+            current_error = vector_norm(vector_diff(xk1, xk, n, threads),n, threads)/vector_norm(xk, n, threads);
 
-        current_error = vector_norm(vector_diff(xk1, xk, n),n)/vector_norm(xk, n);
+            cout<<endl<<"Iteration : "<<++counter<< "\t Current error value : "<< current_error<<endl;
 
-        cout<<endl<<"Iteration : "<<++counter<< "\t Current error value : "<< current_error<<endl;
-
-        for(int i=0;i<n;i++)
-        {
-            xk[i]=xk1[i];
+            for(int i=0;i<n;i++)
+            {
+                xk[i]=xk1[i];
+            }
         }
     }
-
+    
     time_taken = omp_get_wtime() - time_taken;
 
     if(current_error<threshold)
     {
         cout<<"Solution has successfully converged within the threshold value!!"<<endl;
-        cout<<"Time taken for convergence : "<<time_taken<<endl;
+        cout<<"Time taken for convergence by "<<threads<<" number of threads : "<<time_taken<<endl;
     }
 
     else
     {
         cout<<"Solution failed to converge within threshold value for "<<counter<<" number of iterations. :("<<endl;
     }
-
 
     
     return xk1;
@@ -249,17 +260,24 @@ int main()
     double epsilon = 0.0001;
     cin>>epsilon;
 
-    double* solution=jacobi_iteration(a, b, n,value, epsilon);
 
-    cout<<endl<<"The final solution for x : ";
-    show_vector(solution, n);
-    cout<<endl;
+    // defining the number of threads to be used
+    int threads[] = {2,4,8};
+
+    double* solution = nullptr;
+    for(auto thread : threads)
+    {
+        solution=jacobi_iteration(a, b, n,value, epsilon, thread);
+
+        cout<<endl<<"The final solution for x : ";
+        show_vector(solution, n);
+        cout<<endl;
 
 
-    cout<< "Verifying the result. The calculated value of b using solution obtained : "<<endl;
-    show_vector(matrix_vector_product(n,a,solution),n);
-    cout<<endl;
-
+        cout<< "Verifying the result. The calculated value of b using solution obtained : "<<endl;
+        show_vector(matrix_vector_product(n,a,solution),n);
+        cout<<endl;
+    }
 
     for(int i=0;i<n;i++)
     {
