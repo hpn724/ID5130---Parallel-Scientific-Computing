@@ -11,12 +11,13 @@ using namespace std;
 
 vector<vector<double>> glorot_init(int nin, int nout) 
 {
-    double sd = sqrt(6.0 / (nin + nout));
+    double sd = 20.0 /(nin + nout);
     vector<vector<double>> result(nin, vector<double>(nout));
     random_device rd;
     mt19937 gen(rd());
 
-    uniform_real_distribution<double> dist(-sd, sd);
+    normal_distribution<double> dist(0, sd);
+    
     for (int i = 0; i < nin; ++i) 
     {
         for (int j = 0; j < nout; ++j) 

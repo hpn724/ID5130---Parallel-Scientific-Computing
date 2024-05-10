@@ -49,6 +49,18 @@ double activation_function(double x)
     return tanh(x);
 }
 
+double RelU(double x)
+{
+    if(x>0)
+    {
+        return x;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
 
 
 
@@ -142,11 +154,11 @@ int main()
 
     double time_taken = omp_get_wtime();
     
-    string filename_1 = "../../Zacharys_Karate_club.csv";
+    string filename_1 = "Zacharys_Karate_club.csv";
     vector<vector<double>> A = readCSV(filename_1);
     int n = A.size();
 
-    string filename_2 = "../../Communities.csv";
+    string filename_2 = "Communities.csv";
     vector<vector<double>> communities = readCSV(filename_2);
     int n_classes = communities.size();
 

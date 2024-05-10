@@ -1,5 +1,5 @@
-#ifndef VECTOR_OPERATIONS_PARALLEL_H
-#define VECTOR_OPERATIONS_PARALLEL_H
+#ifndef VECTOR_OPERATIONS_omp_H
+#define VECTOR_OPERATIONS_omp_H
 
 #include <vector>
 

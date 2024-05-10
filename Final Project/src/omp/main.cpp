@@ -303,11 +303,11 @@ double GCN_train(int n,vector<vector<double>> A, int n_classes, vector<vector<do
 
     cout<<"Total time taken for the program : "<<timer<<endl<<endl;
 
-    string filepath1 = "Solution/omp/GCN_embed_omp_"+to_string(thread)+".csv";
+    string filepath1 = "SynData Solutions/omp/GCN_embed_omp_"+to_string(thread)+".csv";
     writeEmbedData(embeds.back(),filepath1);
     
 
-    string filepath2 = "Solution/omp/GCN_omp_"+to_string(thread)+"_eval_params.csv";
+    string filepath2 = "SynData Solutions/omp/GCN_omp_"+to_string(thread)+"_eval_params.csv";
     writeModelEval(accs,train_losses,test_losses,filepath2);
 
 
@@ -354,7 +354,7 @@ int main()
     }
 
     
-    string filepath = "Solution/omp/GCN_omp_time_taken_"+to_string(num_hidden_layers)+".csv";
+    string filepath = "SynData Solutions/omp/GCN_omp_time_taken_"+to_string(num_hidden_layers)+".csv";
     writeTimeTaken(num_threads,time_taken,filepath);
     
 

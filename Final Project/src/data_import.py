@@ -4,6 +4,8 @@ from networkx.algorithms.community.modularity_max import greedy_modularity_commu
 import pandas as pd
 import csv
 import pickle
+import random
+import matplotlib.pyplot as plt
 
 #import the graph
 g = nx.karate_club_graph()
