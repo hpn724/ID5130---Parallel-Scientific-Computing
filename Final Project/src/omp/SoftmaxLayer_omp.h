@@ -1,0 +1,37 @@
+#ifndef E4E6D97E_3C4C_477A_8F68_A0EEC3B20D35
+#define E4E6D97E_3C4C_477A_8F68_A0EEC3B20D35
+#ifndef SOFTMAXLAYER_omp_H
+#define SOFTMAXLAYER_omp_H
+
+#include <string>
+#include <vector>
+#include <functional>
+#include "GradDescentOptim_omp.h" // Include necessary header files
+
+class SoftmaxLayer {
+private:
+    int n_inputs;
+    int n_outputs;
+    std::vector<std::vector<double>> W;
+    std::vector<std::vector<double>> b;
+    std::string name;
+    std::vector<std::vector<double>> _X;
+
+public:
+    SoftmaxLayer(int n_inputs, int n_outputs, std::string name = "");
+
+    std::string repr() const;
+
+    std::vector<std::vector<double>> shift(const std::vector<std::vector<double>>& proj) const;
+
+    std::vector<std::vector<double>> forward(const std::vector<std::vector<double>>& X, std::vector<std::vector<double>> W = {}, std::vector<std::vector<double>> b = {});
+
+    std::pair<std::vector<std::vector<double>>, std::vector<std::vector<double>>> backward(const GradDescentOptim& optim, bool update = true);
+
+    std::vector<std::vector<double>> getAttr(std::string argname);
+};
+
+#endif // SOFTMAXLAYER_H
+
+
+#endif /* E4E6D97E_3C4C_477A_8F68_A0EEC3B20D35 */

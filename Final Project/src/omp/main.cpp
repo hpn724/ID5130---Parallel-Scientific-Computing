@@ -6,26 +6,29 @@
 #include <functional>
 #include <fstream>
 #include <sstream>
-#include <omp.h> //for the timing the program 
-#include "operations.h"
-#include "GradDescentOptim.h"
-#include "GCNLayer.h"
-#include "SoftmaxLayer.h"
-#include "GCNNetwork.h"
+#include <time.h>
+#include <omp.h>
+#include "operations_omp.h"
+#include "GradDescentOptim_omp.h"
+#include "GCNLayer_omp.h"
+#include "SoftmaxLayer_omp.h"
+#include "GCNNetwork_omp.h"
 
 
 using namespace std;
 
 
-vector<double> cross_entropy(const vector<vector<double>>& pred, const vector<vector<double>>& labels) {
+vector<double> cross_entropy(const vector<vector<double>>& pred, const vector<vector<double>>& labels) 
+{
     vector<double> loss;
     
-    for (size_t i = 0; i < pred.size(); i++) 
+    int i,j;
+    for (i = 0; i < pred.size(); i++) 
     {
         // Find the index of the maximum value in the ground truth label
         int maxIdx = 0;
         double maxVal = labels[i][0];
-        for (size_t j = 1; j < labels[i].size(); j++) 
+        for (j = 1; j < labels[i].size(); j++) 
         {
             if (labels[i][j] > maxVal) 
             {
@@ -39,6 +42,7 @@ vector<double> cross_entropy(const vector<vector<double>>& pred, const vector<ve
         
         loss.push_back(logPred);
     }
+
     
     return loss;
 }
@@ -85,13 +89,12 @@ vector<vector<double>> readCSV(const string& filename)
 }
 
 
-void writeEmbedData(vector<vector<vector<double>>> data, string filepath)
+void writeEmbedData(vector<vector<double>> data, string filepath)
 {
-    int depth = data.size();
-    int rows = data[0].size();
-    int cols = data[0][0].size();
+    int rows = data.size();
+    int cols = data[0].size();
 
-    ofstream outFile(filepath, std::ios::binary);
+    ofstream outFile(filepath);
 
     if (!outFile.is_open()) 
     {
@@ -99,18 +102,25 @@ void writeEmbedData(vector<vector<vector<double>>> data, string filepath)
         return;
     }
 
-    for (int d = 0; d < depth; ++d) 
+
+    for (int i = 0; i < rows; ++i) 
     {
-        for (int i = 0; i < rows; ++i) 
+        for (int j = 0; j < cols; ++j) 
         {
-            for (int j = 0; j < cols; ++j) 
+            if(j!=cols-1)
             {
-                double value = data[d][i][j];
-                outFile.write(reinterpret_cast<const char*>(&value), sizeof(double));
+                outFile<<data[i][j]<<",";
             }
+            else
+            {
+                outFile<<data[i][j];
+            }
+            
         }
+        outFile<<endl;
+        
     }
-        cout<<"Successfully wrote the data as a binary file"<<endl;
+    cout<<"Successfully wrote the data as a binary file"<<endl;
     outFile.close();
 }
 
@@ -136,38 +146,48 @@ void writeModelEval(vector<double> accs, vector<double> train_losses, vector<dou
 }
 
 
-
-int main()
+void writeTimeTaken(vector<int> num_threads, vector<double> time_taken, string filepath)
 {
+    int n = num_threads.size();
 
-    double time_taken = omp_get_wtime();
-    
-    string filename_1 = "../../Zacharys_Karate_club.csv";
-    vector<vector<double>> A = readCSV(filename_1);
-    int n = A.size();
+    ofstream outFile(filepath);
 
-    string filename_2 = "../../Communities.csv";
-    vector<vector<double>> communities = readCSV(filename_2);
-    int n_classes = communities.size();
-
-    vector<vector<double>> labels(n,vector<double>(communities.size(),0));
-
-    for(int i=0;i<communities.size();i++)
+    if (!outFile.is_open()) 
     {
-        for(int j=0;j<communities[i].size();j++)
-        {
-            labels[communities[i][j]][i] = 1;
-        }
+        cerr << "Error opening file " << filepath << endl;
+        return;
     }
+
+    outFile<<"Number of threads,Time taken"<<endl;
+
+    for(int i=0;i<n;i++)
+    {
+        outFile<<num_threads[i]<<","<<time_taken[i]<<endl;
+    }
+    cout<<"Successfully wrote the time taken to a csv file !!"<<endl<<endl;
+    outFile.close();
+}
+
+
+
+
+double GCN_train(int n,vector<vector<double>> A, int n_classes, vector<vector<double>> labels, int num_hidden_layers, vector<int> hidden_layer_sizes,int thread)
+{
+    omp_set_num_threads(thread);
+    double timer = omp_get_wtime();
+    cout<<endl<<"Training the model for "<<thread<<" number of threads and "<<num_hidden_layers<<" number of hidden layers"<<endl;
+    int i,j,epoch;
+    double sum;
 
     vector<vector<double>> A_mod = matrix_sum(A,identity_matrix(n));
 
     vector<vector<double>> D(n, vector<double>(n,0));
     
-    for(int i=0;i<n;i++)
+
+    for( i=0;i<n;i++)
     {
-        double sum = 0;
-        for(int j=0;j<A[0].size();j++)
+        sum = 0;
+        for( j=0;j<A[0].size();j++)
         {
             sum+=A_mod[i][j];
         }
@@ -179,19 +199,14 @@ int main()
     vector<vector<double>> A_hat = matrix_product(matrix_product(D_mod,A_mod),D_mod);
 
     vector<vector<double>> X = identity_matrix(n);
-
-    GCNLayer gcn1(n,2,activation_function,"1");
-    SoftmaxLayer sm1(2,n_classes,"SM");
-    GradDescentOptim opt(0,1);
     
+
     GCNNetwork gcn_model(n,n_classes,2,{16,2},activation_function,100);
 
-    /////////////////////////////////////////////////////////////////////////////////////////////////////
-    /*                                      Training the model                                         */
-    /////////////////////////////////////////////////////////////////////////////////////////////////////
 
     vector<int> train_nodes = {0,1,8};
     vector<int> test_nodes;
+
     for (int i = 0; i < labels.size(); ++i) 
     {
         if (find(train_nodes.begin(), train_nodes.end(), i) == train_nodes.end()) 
@@ -217,7 +232,8 @@ int main()
 
     vector<bool> acc_test;
 
-    for(int epoch =0;epoch<max_epochs;epoch++)
+
+    for( epoch =0;epoch<max_epochs;epoch++)
     {
         loss_train=0;
         loss_test=0;
@@ -227,7 +243,7 @@ int main()
 
         gcn_model.sm_out->backward(opt2,true);
 
-        for(int i = gcn_model.gcn_layers.size()-1;i>=0;i--)
+        for( i = gcn_model.gcn_layers.size()-1;i>=0;i--)
         {
             gcn_model.gcn_layers[i]->backward(opt2,true);
         }
@@ -236,7 +252,8 @@ int main()
 
         vector<bool> acc_test;
         for (size_t i = 0; i < labels.size(); ++i) {
-            if (find(train_nodes.begin(), train_nodes.end(), i) == train_nodes.end()) {
+            if (find(train_nodes.begin(), train_nodes.end(), i) == train_nodes.end()) 
+            {
                 int argmax_y_pred = distance(y_pred[i].begin(), max_element(y_pred[i].begin(), y_pred[i].end()));
                 int argmax_labels = distance(labels[i].begin(), max_element(labels[i].begin(), labels[i].end()));
                 acc_test.push_back(argmax_y_pred == argmax_labels);
@@ -246,13 +263,13 @@ int main()
         accs.push_back(acc_mean);
 
         loss = cross_entropy(y_pred, labels);
-        for(int i=0;i<train_nodes.size();i++)
+        for( int i : train_nodes)
         {
-            loss_train+=loss[train_nodes[i]]/train_nodes.size();
+            loss_train+=loss[i]/train_nodes.size();
         }
-        for(int i=0;i<test_nodes.size();i++)
+        for( int i : test_nodes)
         {
-            loss_test+=loss[test_nodes[i]]/test_nodes.size();
+            loss_test+=loss[i]/test_nodes.size();
         }
 
         train_losses.push_back(loss_train);
@@ -268,6 +285,7 @@ int main()
             es_iters+=1;
         }
 
+
         
         if(epoch%100==0)
         {
@@ -277,23 +295,68 @@ int main()
 
     }
 
+    timer = omp_get_wtime()-timer;
+    
     cout<<endl<<"Finished training and classifying the data !!"<<endl<<endl;
 
-    cout<<"Accuracy obtained : "<<accs.back()<<endl;
+    cout<<endl<<"Accuracy obtained : "<<accs.back()<<endl;
 
+    cout<<"Total time taken for the program : "<<timer<<endl<<endl;
+
+    string filepath1 = "Solution/omp/GCN_embed_omp_"+to_string(thread)+".csv";
+    writeEmbedData(embeds.back(),filepath1);
     
-    time_taken = omp_get_wtime()-time_taken;
 
-    printf("Total time taken for the program : %f \n \n",time_taken);
-
-    string filepath1 = "Solution/Serial/GCN_embed_serial.bin";
-    writeEmbedData(embeds,filepath1);
-
-
-    string filepath2 = "Solution/Serial/GCN_serial_eval_params.csv";
+    string filepath2 = "Solution/omp/GCN_omp_"+to_string(thread)+"_eval_params.csv";
     writeModelEval(accs,train_losses,test_losses,filepath2);
 
 
+    
+    return timer;
+}
+
+
+
+
+int main()
+{
+
+    
+    
+    string filename_1 = "Zacharys_Karate_club.csv";
+    vector<vector<double>> A = readCSV(filename_1);
+    int n = A.size();
+
+    string filename_2 = "Communities.csv";
+    vector<vector<double>> communities = readCSV(filename_2);
+    int n_classes = communities.size();
+
+    vector<int> num_threads = {1,2,4,6,8,10,12};
+
+    vector<vector<double>> labels(n,vector<double>(communities.size(),0));
+
+    for(int i=0;i<communities.size();i++)
+    {
+        for(int j=0;j<communities[i].size();j++)
+        {
+            labels[communities[i][j]][i] = 1;
+        }
+    }
+
+    int num_hidden_layers = 2;
+    vector<int> hidden_layer_sizes = {16,2};
+
+    vector<double> time_taken;
+
+    for(int i=0;i<num_threads.size();i++)
+    {
+        time_taken.push_back(GCN_train(n,A,n_classes,labels,num_hidden_layers,hidden_layer_sizes,num_threads[i]));
+    }
+
+    
+    string filepath = "Solution/omp/GCN_omp_time_taken_"+to_string(num_hidden_layers)+".csv";
+    writeTimeTaken(num_threads,time_taken,filepath);
+    
 
 
     return 0;

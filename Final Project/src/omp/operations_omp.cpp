@@ -1,11 +1,13 @@
 #include<iostream>
 #include<cmath>
 #include<vector>
-#include "operations.h"
 #include<random>
+#include "operations_omp.h"
+
 
 
 using namespace std;
+
 
 vector<vector<double>> glorot_init(int nin, int nout) 
 {
@@ -13,8 +15,8 @@ vector<vector<double>> glorot_init(int nin, int nout)
     vector<vector<double>> result(nin, vector<double>(nout));
     random_device rd;
     mt19937 gen(rd());
-    uniform_real_distribution<double> dist(-sd, sd);
 
+    uniform_real_distribution<double> dist(-sd, sd);
     for (int i = 0; i < nin; ++i) 
     {
         for (int j = 0; j < nout; ++j) 
@@ -62,13 +64,17 @@ void show_matrix(vector<vector<double>> A)
 
 //Function to flatten a matrix to a 1D element
 template<typename T>
-vector<T> flatten(const vector<vector<T>>& nested_vector) 
+std::vector<T> flatten(const std::vector<std::vector<T>>& nested_vector) 
 {
-    vector<T> flattened_vector;
+    std::vector<T> flattened_vector;
 
-    for (const auto& inner_vector : nested_vector) 
+    //#pragma omp parallel for collapse(2) shared(nested_vector, flattened_vector) schedule(static)
+    for (size_t i = 0; i < nested_vector.size(); ++i) 
     {
-        flattened_vector.insert(flattened_vector.end(), inner_vector.begin(), inner_vector.end());
+        for (size_t j = 0; j < nested_vector[0].size(); ++j) 
+        {
+            flattened_vector.push_back(nested_vector[i][j]);
+        }
     }
 
     return flattened_vector;
@@ -80,12 +86,15 @@ vector<vector<double>> reshape(const vector<double>& input_vector, int rows, int
 {
     vector<vector<double>> reshaped_matrix(rows, vector<double>(cols));
 
-    int index = 0;
-    for (int i = 0; i < rows; ++i) 
+    int i,j,index = 0;
+    
+    //#pragma omp parallel for collapse(2) shared(input_vector, reshaped_matrix) schedule(static) 
+    for (i = 0; i < rows; ++i) 
     {
-        for (int j = 0; j < cols; ++j) 
+        for (j = 0; j < cols; ++j) 
         {
             reshaped_matrix[i][j] = input_vector[index++];
+            
         }
     }
 
@@ -96,7 +105,9 @@ vector<vector<double>> reshape(const vector<double>& input_vector, int rows, int
 double norm(vector<double> A)
 {
     double sum=0;
-    for(int i=0;i<A.size();i++)
+    int i;
+    #pragma omp parallel for reduction(+ : sum)
+    for(i=0;i<A.size();i++)
     {
         sum+=pow(A[i],2);
     }
@@ -106,11 +117,14 @@ double norm(vector<double> A)
 //Function to find the difference between two vectors
 vector<double> vector_diff(vector<double> A, vector<double> B)
 {
-    vector<double> diff;
-    for(int i=0;i<A.size();i++)
+    vector<double> diff(A.size());
+
+    #pragma omp parallel for
+    for (int i = 0; i < A.size(); i++) 
     {
-        diff.push_back(A[i]-B[i]);
+        diff[i] = A[i] - B[i];
     }
+
     return diff;
 }
 
@@ -125,22 +139,33 @@ double norm_diff(vector<double> A, vector<double> B)
 vector<vector<double>> transpose(const vector<vector<double>>& matrix)
 {
     vector<vector<double>> result(matrix[0].size(), vector<double>(matrix.size(), 0.0));
-    for (size_t i = 0; i < matrix.size(); ++i) 
+
+    int i,j;
+    #pragma omp parallel for collapse(2)
+    for (i = 0; i < matrix.size(); ++i) 
     {
-        for (size_t j = 0; j < matrix[0].size(); ++j) 
+        for (j = 0; j < matrix[0].size(); ++j) 
         {
             result[j][i] = matrix[i][j];
         }
     }
+    
+    
+    
     return result;
+    
 }
 
 //Function for the dot product of two vectors
+
 double dotProduct(vector<double> A, vector<double> B)
 {
     double sum=0;
-    for(int i=0;i<A.size();i++)
+    int i;
+    #pragma omp parallel for shared(A,B) 
+    for(i=0;i<A.size();i++)
     {
+        #pragma omp atomic
         sum+=A[i]*B[i];
     }
     return sum;
@@ -151,6 +176,8 @@ template<typename T>
 double mean(vector<T> A)
 {
     double sum=0;
+    int i;
+    #pragma omp parallel for shared(A) reduction(+ : sum)
     for(int i=0;i<A.size();i++)
     {
         sum+=A[i];
@@ -162,7 +189,9 @@ double mean(vector<T> A)
 vector<vector<double>> identity_matrix(int n)
 {
     vector<vector<double>> I(n,vector<double>(n,0));
-    for(int i=0;i<n;i++)
+    int i;
+    #pragma omp parallel for
+    for(i=0;i<n;i++)
     {
         I[i][i] = 1;
     }
@@ -174,7 +203,9 @@ vector<vector<double>> square_root_inverse_diag_matrix(vector<vector<double>> di
 {    
     size_t n = diag.size();
     vector<vector<double>> inv(n, vector<double>(n, 0.0));
-    for (size_t i = 0; i < n; i++) 
+    int i;
+    #pragma omp parallel for 
+    for (i = 0; i < n; i++) 
     {
         
         inv[i][i] = 1.0 / sqrt(diag[i][i]);
@@ -197,20 +228,27 @@ vector<vector<double>> matrix_sum(const vector<vector<double>>& A, const vector<
 
     // Initialize the result matrix with zeros
     vector<vector<double>> result(rows_result, vector<double>(cols_result, 0.0));
-
-    // Perform element-wise addition with broadcasting
-    for (size_t i = 0; i < rows_result; ++i) {
-        for (size_t j = 0; j < cols_result; ++j) {
-            if (i < rows_A && j < cols_A) {
+    int i,j;
+    #pragma omp parallel for collapse(2)
+    for ( i = 0; i < rows_result; ++i) 
+    {
+        for ( j = 0; j < cols_result; ++j) 
+        {
+            if (i < rows_A && j < cols_A) 
+            {
                 // Add element from A
+                #pragma omp atomic
                 result[i][j] += A[i][j];
             }
-            if (i < rows_B && j < cols_B) {
+            if (i < rows_B && j < cols_B) 
+            {
                 // Add element from B
+                #pragma omp atomic
                 result[i][j] += B[i][j];
             }
         }
     }
+    
 
     return result;
 }
@@ -230,15 +268,23 @@ vector<vector<double>> matrix_product(const vector<vector<double>> A, const vect
         return {};
     }
 
+    double temp ;
     vector<vector<double>> product(rows_A, vector<double>(cols_B, 0.0));
-
-    for (size_t i = 0; i < rows_A; ++i) {
-        for (size_t j = 0; j < cols_B; ++j) {
-            for (size_t k = 0; k < cols_A; ++k) {
-                product[i][j] += A[i][k] * B[k][j];
+    int i,j,k;
+    #pragma omp parallel for private(i,j,k) shared(rows_A,cols_B,cols_A,A,B,product) reduction(+ : temp)
+    for (i = 0; i < rows_A; ++i) 
+    {
+        for (j = 0; j < cols_B; ++j) 
+        {
+            temp = 0;
+            for (k = 0; k < cols_A; ++k) 
+            {
+                temp += A[i][k] * B[k][j];
             }
+            product[i][j] = temp;
         }
     }
+
 
     return product;
 }
